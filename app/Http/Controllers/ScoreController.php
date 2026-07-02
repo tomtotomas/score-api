@@ -7,59 +7,34 @@ use Illuminate\Http\Request;
 
 class ScoreController extends Controller
 {
-    /**
-     * Display a listing of the resource.
-     */
     public function index()
     {
-        //
+        $scores = Score::all();
+        return response()->json($scores);
     }
 
-    /**
-     * Show the form for creating a new resource.
-     */
-    public function create()
-    {
-        //
-    }
-
-    /**
-     * Store a newly created resource in storage.
-     */
     public function store(Request $request)
     {
-        //
+        $data = $request->validate([
+            'player' => 'required|string|max:3',
+            'score' => 'required|integer',
+        ]);
+
+        $newScore = Score::create($data);
+
+        $top5Ids = Score::orderBy('score', 'desc')
+            ->take(5)
+            ->pluck('id');
+
+        Score::whereNotIn('id', $top5Ids)->delete();
+
+        return response()->json($newScore, 201);
     }
 
-    /**
-     * Display the specified resource.
-     */
-    public function show(Score $score)
-    {
-        //
-    }
-
-    /**
-     * Show the form for editing the specified resource.
-     */
-    public function edit(Score $score)
-    {
-        //
-    }
-
-    /**
-     * Update the specified resource in storage.
-     */
-    public function update(Request $request, Score $score)
-    {
-        //
-    }
-
-    /**
-     * Remove the specified resource from storage.
-     */
     public function destroy(Score $score)
     {
-        //
+        $score->delete();
+
+        return response()->json(['message' => 'Score deleted successfully']);
     }
 }
