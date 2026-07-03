@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Score;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\URL;
 
 class ScoreController extends Controller
 {
@@ -13,11 +14,26 @@ class ScoreController extends Controller
         return response()->json($scores);
     }
 
-    public function store(Request $request)
+    public function startGame()
+    {
+        $gameId = uniqid('bj_', true);
+
+        $signedUrl = URL::temporarySignedRoute(
+            'api.save-score', 
+            now()->addMinutes(15), 
+            ['game_id' => $gameId]
+        );
+
+        return response()->json([
+            'save_url' => $signedUrl
+        ]);
+    }
+
+    public function store(Request $request, $game_id)
     {
         $data = $request->validate([
             'player' => 'required|string|max:3',
-            'score' => 'required|integer',
+            'score' => 'required|integer|min:1|max:999',
         ]);
 
         $newScore = Score::create($data);
