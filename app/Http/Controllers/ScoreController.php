@@ -4,39 +4,37 @@ namespace App\Http\Controllers;
 
 use App\Models\Score;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\URL;
+use Illuminate\Support\Facades\Cache;
 
 class ScoreController extends Controller
 {
     public function index()
     {
-        $scores = Score::orderBy('score', 'desc')->take(5)->get();
+        $scores = Cache::remember('top_scores', 30, function () {
+            return Score::orderBy('score', 'desc')->take(5)->get();
+        });
+
         return response()->json($scores);
     }
 
-    public function startGame()
+    public function store(Request $request, string $game_id)
     {
-        $gameId = uniqid('bj_', true);
+        $session = Cache::get($this->sessionKey($game_id));
 
-        $signedUrl = URL::temporarySignedRoute(
-            'api.save-score', 
-            now()->addMinutes(15), 
-            ['game_id' => $gameId]
-        );
+        if (!$session || !$session['finished'] || ($session['result'] ?? null) !== 'lose') {
+            return response()->json(['message' => 'Invalid or expired game session'], 403);
+        }
 
-        return response()->json([
-            'save_url' => $signedUrl
-        ]);
-    }
-
-    public function store(Request $request, $game_id)
-    {
         $data = $request->validate([
-            'player' => 'required|string|max:3',
-            'score' => 'required|integer|min:1|max:999',
+            'player' => ['required', 'string', 'size:3', 'regex:/^[A-Za-z0-9]{3}$/'],
         ]);
 
-        $newScore = Score::create($data);
+        $newScore = Score::create([
+            'player' => $data['player'],
+            'score' => $session['streak'],
+        ]);
+
+        Cache::forget($this->sessionKey($game_id));
 
         $top5Ids = Score::orderBy('score', 'desc')
             ->take(5)
@@ -44,13 +42,13 @@ class ScoreController extends Controller
 
         Score::whereNotIn('id', $top5Ids)->delete();
 
+        Cache::forget('top_scores');
+
         return response()->json($newScore, 201);
     }
 
-    public function destroy(Score $score)
+    private function sessionKey(string $gameId): string
     {
-        $score->delete();
-
-        return response()->json(['message' => 'Score deleted successfully']);
+        return "game_session_{$gameId}";
     }
 }
